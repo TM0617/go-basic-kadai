@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 type ValidationError struct {
 	Message string
@@ -47,14 +50,14 @@ func validateShape(s Shape) error {
 	case Rectangle:
 		if val.Width <= 0 {
 			//自分でエラーを作る。
-			return ValidationError{
+			return &ValidationError{
 				Message: "幅は正の数を指定してください。",
 				Field:   "Rectangle.Width",
 				Value:   val.Width,
 			}
 		}
 		if val.Height <= 0 {
-			return ValidationError{
+			return &ValidationError{
 				Message: "高さは正の数を指定してください。",
 				Field:   "Rectangle.Height",
 				Value:   val.Height,
@@ -62,7 +65,7 @@ func validateShape(s Shape) error {
 		}
 	case Circle:
 		if val.Radius <= 0 {
-			return ValidationError{
+			return &ValidationError{
 				Message: "半径は正の数を指定してください。",
 				Field:   "Circle.Radius",
 				Value:   val.Radius,
@@ -78,10 +81,11 @@ func validateShape(s Shape) error {
 	return nil
 }
 
-func calc(s Shape) (float64, float64) {
-	area := s.Area()
-	perimeter := s.Perimeter()
-	return area, perimeter
+func calcShapes(s Shape) (float64, float64, error) {
+	if err := validateShape(s); err != nil {
+		return 0, 0, fmt.Errorf("%T: %w", s, err)
+	}
+	return s.Area(), s.Perimeter(), nil
 }
 
 func main() {
@@ -93,29 +97,33 @@ func main() {
 		Circle{Radius: -1.0},                // 不正（半径が不正）
 		Rectangle{Width: 1.0, Height: 0.0},  // 不正（高さが不正）
 	}
+
 	var validShapes []Shape
 
 	for index, shape := range shapes {
 		shapeType := fmt.Sprintf("%T", shape)
 
-		err := validateShape(shape)
+		_, _, err := calcShapes(shape)
 		if err != nil {
-			fmt.Printf("#%d:%s => NG: %v\n", index+1, shapeType, err)
+			var validationErr *ValidationError
+			if errors.As(err, &validationErr) {
+				fmt.Printf("#%d:%s => NG: %v\n", index+1, shapeType, validationErr)
+				fmt.Printf(" [詳細] Field=%s, Value=%.2f\n", validationErr.Field, validationErr.Value)
+			}
 			continue
 		}
-
 		fmt.Printf("#%d: %s => バリデーションOK\n", index+1, shapeType)
 		validShapes = append(validShapes, shape)
 
 	}
+
 	for _, shape := range validShapes {
-		shapeType := fmt.Sprintf("%T", shape)
-
-		area, perimeter := calc(shape)
-
 		fmt.Printf(
-			"図形：%s｜面積：%.2f ｜周長：%.2f\n",
-			shapeType, area, perimeter,
+			"図形：%T|面積：%.2f|周長：%.2f\n",
+			shape,
+			shape.Area(),
+			shape.Perimeter(),
 		)
+
 	}
 }
